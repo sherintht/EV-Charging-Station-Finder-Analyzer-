@@ -5,3 +5,4 @@ plotly
 numpy
 folium
 streamlit-folium==0.10.0
+geopy
