@@ -5,7 +5,7 @@ import folium
 import numpy as np
 from streamlit_folium import folium_static
 from geopy.distance import geodesic
-from streamlit_geolocation import streamlit_geolocation
+from geopy.geocoders import Nominatim  # For geolocation fallback
 
 # --- 1. PAGE CONFIGURATION ---
 st.set_page_config(
@@ -18,19 +18,32 @@ st.set_page_config(
 # --- 2. GET USER'S CURRENT LOCATION ---
 st.sidebar.header("Your Location")
 
-# Use streamlit-geolocation to get the user's location
-location = streamlit_geolocation()
+# Fallback function to get geolocation using geopy
+def get_location():
+    geolocator = Nominatim(user_agent="ev-charging-app")
+    location = geolocator.geocode("Thrissur, India")  # Fallback to Thrissur
+    if location:
+        return location.latitude, location.longitude
+    else:
+        return None, None
 
-if location and location.get('latitude') and location.get('longitude'):
-    latitude = location['latitude']
-    longitude = location['longitude']
-    st.sidebar.write(f"Your current location:")
-    st.sidebar.write(f"Latitude: {latitude:.4f}, Longitude: {longitude:.4f}")
-else:
-    st.sidebar.warning("Could not automatically determine your location. Using default (Thrissur). Please enter manually if needed.")
-    # Fallback to manual input with Thrissur as default
-    latitude = st.sidebar.number_input("Enter Latitude:", value=10.5276, min_value=-90.0, max_value=90.0, step=0.0001, format="%.4f")
-    longitude = st.sidebar.number_input("Enter Longitude:", value=76.2144, min_value=-180.0, max_value=180.0, step=0.0001, format="%.4f")
+# Try using streamlit-geolocation to get the user's location
+try:
+    from streamlit_geolocation import geolocation
+    location = geolocation()
+    if location and location.get('latitude') and location.get('longitude'):
+        latitude = location['latitude']
+        longitude = location['longitude']
+        st.sidebar.write(f"Your current location: Latitude: {latitude:.4f}, Longitude: {longitude:.4f}")
+except ImportError:
+    st.warning("streamlit-geolocation module is unavailable. Using fallback geolocation.")
+    latitude, longitude = get_location()
+    if latitude and longitude:
+        st.sidebar.write(f"Fallback location: Latitude: {latitude:.4f}, Longitude: {longitude:.4f}")
+    else:
+        st.sidebar.warning("Could not determine location. Using default coordinates (Thrissur).")
+        latitude = st.sidebar.number_input("Enter Latitude:", value=10.5276, min_value=-90.0, max_value=90.0, step=0.0001, format="%.4f")
+        longitude = st.sidebar.number_input("Enter Longitude:", value=76.2144, min_value=-180.0, max_value=180.0, step=0.0001, format="%.4f")
 
 
 # --- 3. DATA FETCHING AND CACHING ---
@@ -140,7 +153,6 @@ if not df.empty:
         unsafe_allow_html=True
     )
     st.info("Click on a station's icon to see more details, including the distance from your location.")
-
 
     # --- 10. MAP DISPLAY ---
     if selected_city != "All" and not filtered_df.empty:
