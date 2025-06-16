@@ -210,4 +210,4 @@ if not df.empty:
 
     folium_static(m, width=1200, height=600)
 else:
-    st.error("Failed to load station data. Please check API key or network connection."
+    st.error("Failed to load station data. Please check API key or network connection.")
