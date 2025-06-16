@@ -13,31 +13,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- 2. ADD LOGO ---
-st.image('path_to_logo.png', width=200)
-
-# --- 3. STYLE CUSTOMIZATION ---
-st.markdown("""
-    <style>
-        .css-1v3fvcr { 
-            background-color: #0A74DA; 
-            color: white;
-            padding: 10px;
-            font-size: 36px;
-            text-align: center;
-            border-radius: 10px;
-        }
-        .css-1v3fvcr h1 {
-            font-family: 'Arial', sans-serif;
-            font-weight: bold;
-        }
-        .stSidebar {
-            background-color: #f1f1f1;
-        }
-    </style>
-""", unsafe_allow_html=True)
-
-# --- 4. DATA FETCHING AND CACHING ---
+# --- 2. DATA FETCHING AND CACHING ---
 @st.cache_data(ttl=3600)
 def get_station_data(country_code='IN', max_results=500):
     """Fetches charging station data from Open Charge Map API and simulates extra data."""
@@ -82,7 +58,7 @@ def get_station_data(country_code='IN', max_results=500):
         st.error(f"API Error: {e}")
         return pd.DataFrame()
 
-# --- 5. MAIN APP ---
+# --- 3. MAIN APP ---
 st.title("EV Charging Station Finder & Analyzer ⚡")
 df = get_station_data()
 
