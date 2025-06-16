@@ -1,6 +1,6 @@
 pip freeze
 pip install streamlit pandas requests plotly numpy
-pip install streamlit-folium
+pip install streamlit-folium==0.10.0
 pip install streamlit
 pip install  pandas 
 pip install  requests 
