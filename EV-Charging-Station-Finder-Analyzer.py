@@ -5,7 +5,7 @@ import folium
 import numpy as np
 from streamlit_folium import folium_static
 from geopy.distance import geodesic
-from geopy.geocoders import Nominatim  # For geolocation fallback
+from streamlit_geolocation import streamlit_geolocation
 
 # --- 1. PAGE CONFIGURATION ---
 st.set_page_config(
@@ -18,32 +18,32 @@ st.set_page_config(
 # --- 2. GET USER'S CURRENT LOCATION ---
 st.sidebar.header("Your Location")
 
-# Fallback function to get geolocation using geopy
-def get_location():
-    geolocator = Nominatim(user_agent="ev-charging-app")
-    location = geolocator.geocode("Thrissur, India")  # Fallback to Thrissur
-    if location:
-        return location.latitude, location.longitude
-    else:
-        return None, None
-
-# Try using streamlit-geolocation to get the user's location
+# This block of code tries to get the live location from your browser
 try:
-    from streamlit_geolocation import geolocation
-    location = geolocation()
-    if location and location.get('latitude') and location.get('longitude'):
-        latitude = location['latitude']
-        longitude = location['longitude']
-        st.sidebar.write(f"Your current location: Latitude: {latitude:.4f}, Longitude: {longitude:.4f}")
-except ImportError:
-    st.warning("streamlit-geolocation module is unavailable. Using fallback geolocation.")
-    latitude, longitude = get_location()
-    if latitude and longitude:
-        st.sidebar.write(f"Fallback location: Latitude: {latitude:.4f}, Longitude: {longitude:.4f}")
+    # 1. Request location from the browser
+    location_data = streamlit_geolocation(key="locator") 
+
+    # 2. Check if the browser returned valid coordinates
+    if location_data and 'latitude' in location_data and 'longitude' in location_data:
+        st.sidebar.success("✅ Current Location Identified!")
+        latitude = location_data['latitude']
+        longitude = location_data['longitude']
+        st.sidebar.write(f"Latitude: {latitude:.4f}, Longitude: {longitude:.4f}")
     else:
-        st.sidebar.warning("Could not determine location. Using default coordinates (Thrissur).")
-        latitude = st.sidebar.number_input("Enter Latitude:", value=10.5276, min_value=-90.0, max_value=90.0, step=0.0001, format="%.4f")
-        longitude = st.sidebar.number_input("Enter Longitude:", value=76.2144, min_value=-180.0, max_value=180.0, step=0.0001, format="%.4f")
+        # 3. This runs if the user clicks "Block" or the browser fails to get a location
+        st.sidebar.warning("⚠️ Live location unavailable. Using default (Thrissur).")
+        st.sidebar.info("Please 'Allow' location access in your browser and reload the page for live tracking.")
+        latitude = 10.5276  # Default Latitude for Thrissur
+        longitude = 76.2144 # Default Longitude for Thrissur
+        st.sidebar.write(f"Fallback Location: Thrissur")
+
+
+except Exception as e:
+    # 4. This is a final fallback in case the geolocation component has an error
+    st.sidebar.error("An error occurred with the geolocation component.")
+    st.sidebar.warning("Using default location (Thrissur).")
+    latitude = 10.5276
+    longitude = 76.2144
 
 
 # --- 3. DATA FETCHING AND CACHING ---
@@ -148,11 +148,12 @@ if not df.empty:
         - <span style="color:blue">**🔵 Your Location**</span>
         - <span style="color:purple">**🟣 Nearest Station**</span>
         - <span style="color:orange">**🟠 Operational Station (in filtered view)**</span>
-        - <span style="color:red">**🟥 Offline/Unknown Status Station (in filtered view)**</span>
+        - <span style="color:black">**⚫ Offline/Unknown Status Station (in filtered view)**</span>
         """,
         unsafe_allow_html=True
     )
     st.info("Click on a station's icon to see more details, including the distance from your location.")
+
 
     # --- 10. MAP DISPLAY ---
     if selected_city != "All" and not filtered_df.empty:
@@ -193,7 +194,7 @@ if not df.empty:
         if row['Is_Operational']:
             color, icon = 'orange', 'bolt'
         else:
-            color, icon = 'red', 'ban'  # Changed color to red for offline/unknown stations
+            color, icon = 'black', 'ban'
             
         popup_html = f"""
         <h6>{row['Title']}</h6>
