@@ -4,7 +4,6 @@ import requests
 import folium
 import numpy as np
 from streamlit_folium import folium_static
-import os
 
 # --- 1. PAGE CONFIGURATION ---
 st.set_page_config(
