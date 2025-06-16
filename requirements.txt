@@ -1,1 +1,2 @@
 pip freeze
+pip install streamlit pandas requests streamlit-folium plotly numpy
