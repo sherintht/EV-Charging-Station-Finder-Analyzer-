@@ -17,7 +17,7 @@ st.set_page_config(
 # --- 2. GET USER'S CURRENT LOCATION ---
 st.sidebar.header("Enter Your Location")
 
-# Use Streamlit's widgets or input method to get user's latitude and longitude
+# User manually enters their latitude and longitude
 latitude = st.sidebar.number_input("Enter Latitude:", value=9.5918, min_value=-90.0, max_value=90.0, step=0.0001)
 longitude = st.sidebar.number_input("Enter Longitude:", value=76.5225, min_value=-180.0, max_value=180.0, step=0.0001)
 
