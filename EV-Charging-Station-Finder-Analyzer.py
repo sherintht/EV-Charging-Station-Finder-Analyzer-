@@ -14,7 +14,7 @@ st.set_page_config(
 )
 
 # --- 2. ADD LOGO ---
-st.image('path_to_logo.png', width=200)
+st.image('https://github.com/sherintht/EV-Charging-Station-Finder-Analyzer-/blob/main/ev_charging.png', width=200)
 
 # --- 3. STYLE CUSTOMIZATION ---
 st.markdown("""
