@@ -5,7 +5,8 @@ import folium
 import numpy as np
 from streamlit_folium import folium_static
 from geopy.distance import geodesic
-from streamlit_geolocation import streamlit_geolocation
+from streamlit_js_eval import streamlit_js_eval
+import json
 
 # --- 1. PAGE CONFIGURATION ---
 st.set_page_config(
@@ -15,35 +16,54 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- 2. GET USER'S CURRENT LOCATION ---
+# --- 2. GET USER'S CURRENT LOCATION (NEW METHOD) ---
 st.sidebar.header("Your Location")
 
-# This block of code tries to get the live location from your browser
+# This JavaScript code directly asks the browser for its location.
+# It returns a JSON object with latitude and longitude, or an error.
+js_code = """
+new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+        reject({error: "Geolocation is not supported by your browser."});
+    } else {
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                resolve({
+                    latitude: position.coords.latitude,
+                    longitude: position.coords.longitude
+                });
+            },
+            (err) => {
+                reject({error: `GEO_ERROR: ${err.message}`});
+            }
+        );
+    }
+})
+"""
+
 try:
-    # 1. Request location from the browser
-    location_data = streamlit_geolocation(key="locator") 
+    # 1. Execute the JavaScript to get location
+    location_json = streamlit_js_eval(js_code)
 
-    # 2. Check if the browser returned valid coordinates
-    if location_data and 'latitude' in location_data and 'longitude' in location_data:
+    # 2. Check if the browser returned a valid location
+    if location_json and 'latitude' in location_json:
         st.sidebar.success("✅ Current Location Identified!")
-        latitude = location_data['latitude']
-        longitude = location_data['longitude']
-        st.sidebar.write(f"Latitude: {latitude:.4f}, Longitude: {longitude:.4f}")
+        latitude = location_json['latitude']
+        longitude = location_json['longitude']
+        st.sidebar.write(f"Latitude: {latitude:.4f}")
+        st.sidebar.write(f"Longitude: {longitude:.4f}")
     else:
-        # 3. This runs if the user clicks "Block" or the browser fails to get a location
-        st.sidebar.warning("⚠️ Live location unavailable. Using default (Thrissur).")
-        st.sidebar.info("Please 'Allow' location access in your browser and reload the page for live tracking.")
-        latitude = 10.5276  # Default Latitude for Thrissur
-        longitude = 76.2144 # Default Longitude for Thrissur
-        st.sidebar.write(f"Fallback Location: Thrissur")
-
+        # 3. If automatic detection fails, ask for manual input (Default: Kottayam)
+        st.sidebar.warning("⚠️ Live location failed or was blocked.")
+        st.sidebar.info("Please enter your location manually. (Defaulted to Kottayam)")
+        latitude = st.sidebar.number_input("Enter Latitude:", value=9.5916, min_value=-90.0, max_value=90.0, step=0.0001, format="%.4f")
+        longitude = st.sidebar.number_input("Enter Longitude:", value=76.5222, min_value=-180.0, max_value=180.0, step=0.0001, format="%.4f")
 
 except Exception as e:
-    # 4. This is a final fallback in case the geolocation component has an error
-    st.sidebar.error("An error occurred with the geolocation component.")
-    st.sidebar.warning("Using default location (Thrissur).")
-    latitude = 10.5276
-    longitude = 76.2144
+    # 4. Final fallback to manual input if the component has a critical error
+    st.sidebar.error("A critical error occurred. Please enter location manually.")
+    latitude = st.sidebar.number_input("Enter Latitude:", value=9.5916, min_value=-90.0, max_value=90.0, step=0.0001, format="%.4f")
+    longitude = st.sidebar.number_input("Enter Longitude:", value=76.5222, min_value=-180.0, max_value=180.0, step=0.0001, format="%.4f")
 
 
 # --- 3. DATA FETCHING AND CACHING ---
@@ -51,20 +71,14 @@ except Exception as e:
 def get_station_data(country_code='IN', max_results=1000):
     """Fetches charging station data from Open Charge Map API and simulates extra data."""
     try:
+        # NOTE: You must have your API key in Streamlit Secrets
         API_KEY = st.secrets["openchargemap"]["api_key"]
     except (FileNotFoundError, KeyError):
         st.error("OpenChargeMap API key not found. Please add it to your Streamlit secrets.")
         return pd.DataFrame()
 
     API_URL = "https://api.openchargemap.io/v3/poi"
-    params = {
-        'output': 'json',
-        'countrycode': country_code,
-        'maxresults': max_results,
-        'compact': True,
-        'verbose': False,
-        'key': API_KEY
-    }
+    params = {'output': 'json', 'countrycode': country_code, 'maxresults': max_results, 'compact': True, 'verbose': False, 'key': API_KEY}
     
     try:
         response = requests.get(API_URL, params=params)
@@ -97,16 +111,13 @@ def find_nearest_station(user_lat, user_lon, df):
     """Finds the nearest charging station from the user's current location."""
     if df.empty:
         return None, float('inf')
-        
     min_distance = float('inf')
     nearest_station = None
-
     for _, row in df.iterrows():
         distance = geodesic((user_lat, user_lon), (row['Latitude'], row['Longitude'])).km
         if distance < min_distance:
             min_distance = distance
             nearest_station = row
-            
     return nearest_station, min_distance
 
 # --- 5. MAIN APP ---
@@ -143,17 +154,13 @@ if not df.empty:
 
     # --- 9. MAP LEGEND ---
     st.subheader("📍 Map Legend")
-    st.markdown(
-        """
+    st.markdown("""
         - <span style="color:blue">**🔵 Your Location**</span>
         - <span style="color:purple">**🟣 Nearest Station**</span>
         - <span style="color:orange">**🟠 Operational Station (in filtered view)**</span>
         - <span style="color:black">**⚫ Offline/Unknown Status Station (in filtered view)**</span>
-        """,
-        unsafe_allow_html=True
-    )
-    st.info("Click on a station's icon to see more details, including the distance from your location.")
-
+        """, unsafe_allow_html=True)
+    st.info("Click on a station's icon to see more details.")
 
     # --- 10. MAP DISPLAY ---
     if selected_city != "All" and not filtered_df.empty:
@@ -165,49 +172,17 @@ if not df.empty:
     
     m = folium.Map(location=map_center, zoom_start=zoom_start, tiles="CartoDB positron")
 
-    # Marker for user's location
-    folium.Marker(
-        location=[latitude, longitude],
-        popup="Your Location",
-        icon=folium.Icon(color='blue', icon='user', prefix='fa')
-    ).add_to(m)
-
-    # Marker for the nearest charging station
+    folium.Marker(location=[latitude, longitude], popup="Your Location", icon=folium.Icon(color='blue', icon='user', prefix='fa')).add_to(m)
     if nearest_station is not None:
-        folium.Marker(
-            location=[nearest_station['Latitude'], nearest_station['Longitude']],
-            popup=folium.Popup(f"<b>Nearest Station:</b><br>{nearest_station['Title']}<br><b>Distance: {distance:.2f} km</b>", max_width=250),
-            icon=folium.Icon(color='purple', icon='bolt', prefix='fa')
-        ).add_to(m)
+        folium.Marker(location=[nearest_station['Latitude'], nearest_station['Longitude']], popup=folium.Popup(f"<b>Nearest Station:</b><br>{nearest_station['Title']}<br><b>Distance: {distance:.2f} km</b>", max_width=250), icon=folium.Icon(color='purple', icon='bolt', prefix='fa')).add_to(m)
 
-    # Add markers for all filtered stations
     for _, row in filtered_df.iterrows():
-        # Skip the nearest station if it's already plotted
         if nearest_station is not None and row.equals(nearest_station):
             continue
-
-        station_coords = (row['Latitude'], row['Longitude'])
-        user_coords = (latitude, longitude)
-        distance_to_station = geodesic(user_coords, station_coords).km
-        
-        # Assign color and icon based on status for filtered stations
-        if row['Is_Operational']:
-            color, icon = 'orange', 'bolt'
-        else:
-            color, icon = 'black', 'ban'
-            
-        popup_html = f"""
-        <h6>{row['Title']}</h6>
-        <b>Distance:</b> {distance_to_station:.2f} km<br>
-        <b>Status:</b> {'Operational' if row['Is_Operational'] else 'Offline'}<br>
-        <b>Price:</b> ₹{row['Price_per_kWh']}/kWh (est.)<br>
-        <b>Rating:</b> {row['Avg_Rating']} ★
-        """
-        folium.Marker(
-            location=[row['Latitude'], row['Longitude']],
-            popup=folium.Popup(popup_html, max_width=250),
-            icon=folium.Icon(color=color, icon=icon, prefix='fa')
-        ).add_to(m)
+        distance_to_station = geodesic((latitude, longitude), (row['Latitude'], row['Longitude'])).km
+        color, icon = ('orange', 'bolt') if row['Is_Operational'] else ('black', 'ban')
+        popup_html = f"""<h6>{row['Title']}</h6><b>Distance:</b> {distance_to_station:.2f} km<br><b>Status:</b> {'Operational' if row['Is_Operational'] else 'Offline'}<br><b>Price:</b> ₹{row['Price_per_kWh']}/kWh (est.)<br><b>Rating:</b> {row['Avg_Rating']} ★"""
+        folium.Marker(location=[row['Latitude'], row['Longitude']], popup=folium.Popup(popup_html, max_width=250), icon=folium.Icon(color=color, icon=icon, prefix='fa')).add_to(m)
 
     folium_static(m, width=1200, height=600)
 else:
