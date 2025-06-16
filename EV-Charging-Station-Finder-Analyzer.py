@@ -1,4 +1,4 @@
-import streamlit as st
+mport streamlit as st
 import pandas as pd
 import requests
 import folium
@@ -91,7 +91,26 @@ st.title("EV Charging Station Finder & Analyzer ⚡")
 df = get_station_data()
 
 if not df.empty:
-    # Find the nearest station to the user’s location
+    # --- 6. SIDEBAR FILTERING ---
+    st.sidebar.header("Filter Stations")
+
+    # Filter by City
+    cities = sorted(df['Town'].dropna().unique())
+    selected_city = st.sidebar.selectbox("Select a City", ["All"] + cities)
+
+    speed_options = {"Any": (0, 350), "Slow (< 7kW)": (0, 7), "Fast (7-50kW)": (7, 50), "Ultra-Fast (> 50kW)": (50, 350)}
+    selected_speed = st.sidebar.select_slider("Charging Speed", options=list(speed_options.keys()))
+
+    min_rating = st.sidebar.slider("Minimum User Rating", 1.0, 5.0, 3.5, 0.1)
+
+    # Filter EV stations by city and rating
+    filtered_df = df.copy()
+    if selected_city != "All":
+        filtered_df = filtered_df[filtered_df['Town'] == selected_city]
+    
+    filtered_df = filtered_df[filtered_df['Avg_Rating'] >= min_rating]
+
+    # --- 7. FIND THE NEAREST STATION BASED ON THE USER'S LOCATION ---
     nearest_station, distance = find_nearest_station(latitude, longitude, df)
 
     st.sidebar.write(f"Distance to nearest station: {distance:.2f} km")
@@ -102,7 +121,7 @@ if not df.empty:
     st.write(f"**Rating**: {nearest_station['Avg_Rating']} ⭐")
     st.write(f"**Price**: ₹{nearest_station['Price_per_kWh']} per kWh")
 
-    # --- MAP DISPLAY ---
+    # --- 8. MAP DISPLAY ---
     map_center = [latitude, longitude]
     m = folium.Map(location=map_center, zoom_start=12)
 
@@ -119,6 +138,22 @@ if not df.empty:
         popup=folium.Popup(f"{nearest_station['Title']}", max_width=250),
         icon=folium.Icon(color='green', icon='flash', prefix='fa')
     ).add_to(m)
+
+    # Add markers for all stations in the selected city
+    for _, row in filtered_df.iterrows():
+        color = 'green' if row['Is_Operational'] else 'red'
+        icon = 'check' if row['Is_Operational'] else 'times'
+        popup_html = f"""
+        <h6>{row['Title']}</h6>
+        <b>Status:</b> {'Operational' if row['Is_Operational'] else 'Offline'}<br>
+        <b>Price:</b> ₹{row['Price_per_kWh']}/kWh (est.)<br>
+        <b>Rating:</b> {row['Avg_Rating']} ★
+        """
+        folium.Marker(
+            location=[row['Latitude'], row['Longitude']],
+            popup=folium.Popup(popup_html, max_width=250),
+            icon=folium.Icon(color=color, icon=icon, prefix='fa')
+        ).add_to(m)
 
     folium_static(m, width=1200, height=600)
 else:
