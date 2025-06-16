@@ -5,6 +5,7 @@ import folium
 import numpy as np
 from streamlit_folium import folium_static
 from geopy.distance import geodesic
+from streamlit_geolocation import streamlit_geolocation
 
 # --- 1. PAGE CONFIGURATION ---
 st.set_page_config(
@@ -15,11 +16,22 @@ st.set_page_config(
 )
 
 # --- 2. GET USER'S CURRENT LOCATION ---
-st.sidebar.header("Enter Your Location")
+st.sidebar.header("Your Location")
 
-# User manually enters their latitude and longitude
-latitude = st.sidebar.number_input("Enter Latitude:", value=9.5918, min_value=-90.0, max_value=90.0, step=0.0001)
-longitude = st.sidebar.number_input("Enter Longitude:", value=76.5225, min_value=-180.0, max_value=180.0, step=0.0001)
+# Use streamlit-geolocation to get the user's location
+location = streamlit_geolocation()
+
+if location and location.get('latitude') and location.get('longitude'):
+    latitude = location['latitude']
+    longitude = location['longitude']
+    st.sidebar.write(f"Your current location:")
+    st.sidebar.write(f"Latitude: {latitude:.4f}, Longitude: {longitude:.4f}")
+else:
+    st.sidebar.warning("Could not automatically determine your location. Please enter it manually.")
+    # Fallback to manual input
+    latitude = st.sidebar.number_input("Enter Latitude:", value=9.5918, min_value=-90.0, max_value=90.0, step=0.0001, format="%.4f")
+    longitude = st.sidebar.number_input("Enter Longitude:", value=76.5225, min_value=-180.0, max_value=180.0, step=0.0001, format="%.4f")
+
 
 # --- 3. DATA FETCHING AND CACHING ---
 @st.cache_data(ttl=3600)
@@ -27,7 +39,11 @@ def get_station_data(country_code='IN', max_results=500):
     """Fetches charging station data from Open Charge Map API and simulates extra data."""
     
     # Fetch API Key
-    API_KEY = st.secrets["openchargemap"]["api_key"]
+    try:
+        API_KEY = st.secrets["openchargemap"]["api_key"]
+    except (FileNotFoundError, KeyError):
+        st.error("OpenChargeMap API key not found. Please add it to your Streamlit secrets.")
+        return pd.DataFrame()
 
     API_URL = "https://api.openchargemap.io/v3/poi"
     params = {
@@ -113,31 +129,44 @@ if not df.empty:
     # --- 7. FIND THE NEAREST STATION BASED ON THE USER'S LOCATION ---
     nearest_station, distance = find_nearest_station(latitude, longitude, df)
 
-    st.sidebar.write(f"Distance to nearest station: {distance:.2f} km")
+    if nearest_station is not None:
+        st.sidebar.write(f"Distance to nearest station: **{distance:.2f} km**")
 
-    # Display the nearest station information
-    st.header(f"Nearest Station: {nearest_station['Title']}")
-    st.write(f"**Location**: {nearest_station['Town']}")
-    st.write(f"**Rating**: {nearest_station['Avg_Rating']} ⭐")
-    st.write(f"**Price**: ₹{nearest_station['Price_per_kWh']} per kWh")
+        # Display the nearest station information
+        st.header(f"Nearest Station: {nearest_station['Title']}")
+        st.write(f"**Location**: {nearest_station['Town']}")
+        st.write(f"**Rating**: {nearest_station['Avg_Rating']} ⭐")
+        st.write(f"**Price**: ₹{nearest_station['Price_per_kWh']} per kWh")
+    else:
+        st.warning("No charging stations found in the dataset.")
+
 
     # --- 8. MAP DISPLAY ---
-    map_center = [latitude, longitude]
-    m = folium.Map(location=map_center, zoom_start=12)
+    if selected_city != "All" and not filtered_df.empty:
+        # Center map on the selected city
+        map_center = [filtered_df['Latitude'].mean(), filtered_df['Longitude'].mean()]
+        zoom_start = 13
+    else:
+        # Default to user's location
+        map_center = [latitude, longitude]
+        zoom_start = 12
+    
+    m = folium.Map(location=map_center, zoom_start=zoom_start)
 
     # Marker for user's location
     folium.Marker(
         location=[latitude, longitude],
         popup="Your Location",
-        icon=folium.Icon(color='blue', icon='info-sign')
+        icon=folium.Icon(color='blue', icon='user', prefix='fa')
     ).add_to(m)
 
     # Marker for the nearest charging station
-    folium.Marker(
-        location=[nearest_station['Latitude'], nearest_station['Longitude']],
-        popup=folium.Popup(f"{nearest_station['Title']}", max_width=250),
-        icon=folium.Icon(color='green', icon='flash', prefix='fa')
-    ).add_to(m)
+    if nearest_station is not None:
+        folium.Marker(
+            location=[nearest_station['Latitude'], nearest_station['Longitude']],
+            popup=folium.Popup(f"<b>Nearest Station:</b><br>{nearest_station['Title']}", max_width=250),
+            icon=folium.Icon(color='purple', icon='bolt', prefix='fa')
+        ).add_to(m)
 
     # Add markers for all stations in the selected city
     for _, row in filtered_df.iterrows():
