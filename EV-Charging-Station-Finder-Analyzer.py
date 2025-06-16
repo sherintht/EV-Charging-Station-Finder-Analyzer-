@@ -16,7 +16,8 @@ st.set_page_config(
 
 # --- 2. MANUAL LOCATION INPUT ---
 st.sidebar.header("Your Location")
-st.sidebar.info("Please enter your coordinates manually.")
+st.sidebar.info("If automatic location detection is disabled for compatibility.
+    Please enter your coordinates manually.")
 st.sidebar.markdown("*(Default location is Kottayam)*")
 
 latitude = st.sidebar.number_input("Enter Latitude:", value=9.5916, format="%.4f")
