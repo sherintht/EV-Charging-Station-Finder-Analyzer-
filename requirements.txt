@@ -1,8 +1,8 @@
 streamlit
-pandas
+streamlit-geolocation
 requests
-plotly
-numpy
 folium
-streamlit-folium==0.10.0
 geopy
+pandas
+numpy
+streamlit-folium
