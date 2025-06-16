@@ -27,18 +27,16 @@ if location and location.get('latitude') and location.get('longitude'):
     st.sidebar.write(f"Your current location:")
     st.sidebar.write(f"Latitude: {latitude:.4f}, Longitude: {longitude:.4f}")
 else:
-    st.sidebar.warning("Could not automatically determine your location. Please enter it manually.")
-    # Fallback to manual input
-    latitude = st.sidebar.number_input("Enter Latitude:", value=9.5918, min_value=-90.0, max_value=90.0, step=0.0001, format="%.4f")
-    longitude = st.sidebar.number_input("Enter Longitude:", value=76.5225, min_value=-180.0, max_value=180.0, step=0.0001, format="%.4f")
+    st.sidebar.warning("Could not automatically determine your location. Using default (Thrissur). Please enter manually if needed.")
+    # Fallback to manual input with Thrissur as default
+    latitude = st.sidebar.number_input("Enter Latitude:", value=10.5276, min_value=-90.0, max_value=90.0, step=0.0001, format="%.4f")
+    longitude = st.sidebar.number_input("Enter Longitude:", value=76.2144, min_value=-180.0, max_value=180.0, step=0.0001, format="%.4f")
 
 
 # --- 3. DATA FETCHING AND CACHING ---
 @st.cache_data(ttl=3600)
-def get_station_data(country_code='IN', max_results=500):
+def get_station_data(country_code='IN', max_results=1000):
     """Fetches charging station data from Open Charge Map API and simulates extra data."""
-    
-    # Fetch API Key
     try:
         API_KEY = st.secrets["openchargemap"]["api_key"]
     except (FileNotFoundError, KeyError):
@@ -71,7 +69,6 @@ def get_station_data(country_code='IN', max_results=500):
         data['Price_per_kWh'] = np.random.uniform(10, 25, len(data)).round(2)
         data['Avg_Rating'] = np.random.uniform(3.5, 5.0, len(data)).round(1)
 
-        # Check for StatusType
         if 'StatusType' in data.columns:
             data['Is_Operational'] = data['StatusType'].apply(lambda x: x.get('IsOperational', False) if isinstance(x, dict) else False)
         else:
@@ -82,24 +79,21 @@ def get_station_data(country_code='IN', max_results=500):
         st.error(f"API Error: {e}")
         return pd.DataFrame()
 
-# --- 4. FIND THE NEAREST STATION BASED ON THE USER'S LOCATION ---
-
+# --- 4. UTILITY FUNCTION ---
 def find_nearest_station(user_lat, user_lon, df):
     """Finds the nearest charging station from the user's current location."""
-    nearest_station = None
+    if df.empty:
+        return None, float('inf')
+        
     min_distance = float('inf')
+    nearest_station = None
 
     for _, row in df.iterrows():
-        station_coords = (row['Latitude'], row['Longitude'])
-        user_coords = (user_lat, user_lon)
-
-        # Calculate the distance using geodesic (Haversine formula)
-        distance = geodesic(user_coords, station_coords).km
-
+        distance = geodesic((user_lat, user_lon), (row['Latitude'], row['Longitude'])).km
         if distance < min_distance:
             min_distance = distance
             nearest_station = row
-
+            
     return nearest_station, min_distance
 
 # --- 5. MAIN APP ---
@@ -109,49 +103,54 @@ df = get_station_data()
 if not df.empty:
     # --- 6. SIDEBAR FILTERING ---
     st.sidebar.header("Filter Stations")
-
-    # Filter by City
     cities = sorted(df['Town'].dropna().unique())
     selected_city = st.sidebar.selectbox("Select a City", ["All"] + cities)
-
-    speed_options = {"Any": (0, 350), "Slow (< 7kW)": (0, 7), "Fast (7-50kW)": (7, 50), "Ultra-Fast (> 50kW)": (50, 350)}
-    selected_speed = st.sidebar.select_slider("Charging Speed", options=list(speed_options.keys()))
-
     min_rating = st.sidebar.slider("Minimum User Rating", 1.0, 5.0, 3.5, 0.1)
 
-    # Filter EV stations by city and rating
+    # --- 7. FILTERING LOGIC ---
     filtered_df = df.copy()
     if selected_city != "All":
+        st.subheader(f"Showing Stations in: {selected_city}")
         filtered_df = filtered_df[filtered_df['Town'] == selected_city]
+    else:
+        st.subheader("Showing All Stations Near You")
     
     filtered_df = filtered_df[filtered_df['Avg_Rating'] >= min_rating]
 
-    # --- 7. FIND THE NEAREST STATION BASED ON THE USER'S LOCATION ---
+    # --- 8. NEAREST STATION INFO ---
     nearest_station, distance = find_nearest_station(latitude, longitude, df)
-
     if nearest_station is not None:
         st.sidebar.write(f"Distance to nearest station: **{distance:.2f} km**")
-
-        # Display the nearest station information
-        st.header(f"Nearest Station: {nearest_station['Title']}")
-        st.write(f"**Location**: {nearest_station['Town']}")
-        st.write(f"**Rating**: {nearest_station['Avg_Rating']} ⭐")
-        st.write(f"**Price**: ₹{nearest_station['Price_per_kWh']} per kWh")
+        st.header(f"Nearest Station to You: {nearest_station['Title']}")
+        st.write(f"**Location**: {nearest_station['Town']} | **Rating**: {nearest_station['Avg_Rating']} ⭐ | **Price**: ₹{nearest_station['Price_per_kWh']} per kWh")
     else:
         st.warning("No charging stations found in the dataset.")
 
+    st.markdown("---")
 
-    # --- 8. MAP DISPLAY ---
+    # --- 9. MAP LEGEND ---
+    st.subheader("📍 Map Legend")
+    st.markdown(
+        """
+        - <span style="color:blue">**🔵 Your Location**</span>
+        - <span style="color:purple">**🟣 Nearest Station**</span>
+        - <span style="color:orange">**🟠 Operational Station (in filtered view)**</span>
+        - <span style="color:black">**⚫ Offline/Unknown Status Station (in filtered view)**</span>
+        """,
+        unsafe_allow_html=True
+    )
+    st.info("Click on a station's icon to see more details, including the distance from your location.")
+
+
+    # --- 10. MAP DISPLAY ---
     if selected_city != "All" and not filtered_df.empty:
-        # Center map on the selected city
         map_center = [filtered_df['Latitude'].mean(), filtered_df['Longitude'].mean()]
         zoom_start = 13
     else:
-        # Default to user's location
         map_center = [latitude, longitude]
         zoom_start = 12
     
-    m = folium.Map(location=map_center, zoom_start=zoom_start)
+    m = folium.Map(location=map_center, zoom_start=zoom_start, tiles="CartoDB positron")
 
     # Marker for user's location
     folium.Marker(
@@ -164,16 +163,29 @@ if not df.empty:
     if nearest_station is not None:
         folium.Marker(
             location=[nearest_station['Latitude'], nearest_station['Longitude']],
-            popup=folium.Popup(f"<b>Nearest Station:</b><br>{nearest_station['Title']}", max_width=250),
+            popup=folium.Popup(f"<b>Nearest Station:</b><br>{nearest_station['Title']}<br><b>Distance: {distance:.2f} km</b>", max_width=250),
             icon=folium.Icon(color='purple', icon='bolt', prefix='fa')
         ).add_to(m)
 
-    # Add markers for all stations in the selected city
+    # Add markers for all filtered stations
     for _, row in filtered_df.iterrows():
-        color = 'green' if row['Is_Operational'] else 'red'
-        icon = 'check' if row['Is_Operational'] else 'times'
+        # Skip the nearest station if it's already plotted
+        if nearest_station is not None and row.equals(nearest_station):
+            continue
+
+        station_coords = (row['Latitude'], row['Longitude'])
+        user_coords = (latitude, longitude)
+        distance_to_station = geodesic(user_coords, station_coords).km
+        
+        # Assign color and icon based on status for filtered stations
+        if row['Is_Operational']:
+            color, icon = 'orange', 'bolt'
+        else:
+            color, icon = 'black', 'ban'
+            
         popup_html = f"""
         <h6>{row['Title']}</h6>
+        <b>Distance:</b> {distance_to_station:.2f} km<br>
         <b>Status:</b> {'Operational' if row['Is_Operational'] else 'Offline'}<br>
         <b>Price:</b> ₹{row['Price_per_kWh']}/kWh (est.)<br>
         <b>Rating:</b> {row['Avg_Rating']} ★
@@ -186,4 +198,4 @@ if not df.empty:
 
     folium_static(m, width=1200, height=600)
 else:
-    st.error("Failed to load station data.")
+    st.error("Failed to load station data. Please check API key or network connection.")
