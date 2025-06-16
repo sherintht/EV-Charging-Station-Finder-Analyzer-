@@ -5,7 +5,6 @@ import folium
 import numpy as np
 from streamlit_folium import folium_static
 from geopy.distance import geodesic
-from streamlit_js_eval import streamlit_js_eval
 
 # --- 1. PAGE CONFIGURATION ---
 st.set_page_config(
@@ -15,56 +14,28 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- 2. LOCATION FINDER WITH USER CONTROL (NEW METHOD) ---
+# --- 2. MANUAL LOCATION INPUT (FINAL METHOD) ---
 st.sidebar.header("Your Location")
-
-# Initialize session state to hold coordinates
-if 'latitude' not in st.session_state:
-    st.session_state.latitude = 9.5916  # Default: Kottayam
-if 'longitude' not in st.session_state:
-    st.session_state.longitude = 76.5222 # Default: Kottayam
-
-# Create the manual input fields
-st.session_state.latitude = st.sidebar.number_input("Enter Latitude:", value=st.session_state.latitude, format="%.4f")
-st.session_state.longitude = st.sidebar.number_input("Enter Longitude:", value=st.session_state.longitude, format="%.4f")
-
-# When the button is clicked, try to get the current location
-if st.sidebar.button("📍 Get My Current Location"):
-    js_code = """
-    new Promise((resolve, reject) => {
-        if (!navigator.geolocation) {
-            reject({error: "Geolocation is not supported by your browser."});
-        } else {
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    resolve({
-                        latitude: position.coords.latitude,
-                        longitude: position.coords.longitude
-                    });
-                },
-                (err) => {
-                    reject({error: `GEO_ERROR: ${err.message}`});
-                }
-            );
-        }
-    })
+st.sidebar.info(
     """
-    try:
-        location_json = streamlit_js_eval(js_code)
-        if location_json and 'latitude' in location_json:
-            st.sidebar.success("Location updated!")
-            # Update the session state, which will rerun the script and update the number_input values
-            st.session_state.latitude = location_json['latitude']
-            st.session_state.longitude = location_json['longitude']
-            st.rerun() # Rerun the script to reflect the new coordinates immediately
-        else:
-            st.sidebar.error("Failed to get location. Please check browser permissions.")
-    except Exception as e:
-        st.sidebar.error("A critical error occurred while fetching location.")
+    Automatic location detection is disabled for compatibility.
+    Please enter your coordinates manually.
+    """
+)
+st.sidebar.markdown("*(Default location is Kottayam)*")
 
-# Use the coordinates from session state for the rest of the app
-latitude = st.session_state.latitude
-longitude = st.session_state.longitude
+
+# Use Kottayam's coordinates as the default
+latitude = st.sidebar.number_input("Enter Latitude:", value=9.5916, format="%.4f")
+longitude = st.sidebar.number_input("Enter Longitude:", value=76.5222, format="%.4f")
+
+st.sidebar.markdown("""
+**How to find coordinates:**
+1.  Go to Google Maps.
+2.  Right-click on any point on the map.
+3.  Click on the coordinates that appear to copy them.
+""")
+
 
 # --- 3. DATA FETCHING AND CACHING ---
 @st.cache_data(ttl=3600)
