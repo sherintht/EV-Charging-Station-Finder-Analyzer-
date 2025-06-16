@@ -148,7 +148,7 @@ if not df.empty:
         - <span style="color:blue">**🔵 Your Location**</span>
         - <span style="color:purple">**🟣 Nearest Station**</span>
         - <span style="color:orange">**🟠 Operational Station (in filtered view)**</span>
-        - <span style="color:black">**⚫ Offline/Unknown Status Station (in filtered view)**</span>
+        - <span style="color:red">**🟥 Offline/Unknown Status Station (in filtered view)**</span>
         """,
         unsafe_allow_html=True
     )
@@ -193,7 +193,7 @@ if not df.empty:
         if row['Is_Operational']:
             color, icon = 'orange', 'bolt'
         else:
-            color, icon = 'black', 'ban'
+            color, icon = 'red', 'ban'  # Changed color to red for offline/unknown stations
             
         popup_html = f"""
         <h6>{row['Title']}</h6>
@@ -210,4 +210,4 @@ if not df.empty:
 
     folium_static(m, width=1200, height=600)
 else:
-    st.error("Failed to load station data. Please check API key or network connection.")
+    st.error("Failed to load station data. Please check API key or network connection."
