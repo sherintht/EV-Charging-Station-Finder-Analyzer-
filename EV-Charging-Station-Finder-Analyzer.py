@@ -1,9 +1,9 @@
 import streamlit as st
 import pandas as pd
 import requests
-from streamlit_folium import folium_static
 import folium
 import numpy as np
+from streamlit_folium import folium_static
 
 # --- 1. PAGE CONFIGURATION ---
 st.set_page_config(
@@ -38,8 +38,8 @@ def get_station_data(country_code='IN', max_results=500):
         data.dropna(subset=['Latitude', 'Longitude', 'Title'], inplace=True)
 
         # Simulate dynamic data (pricing, ratings) for demonstration
-        np.random.seed(42) # for reproducible results
-        data['Price_per_kWh'] = np.random.uniform(10, 25, len(data)).round(2) # Simulated price in INR
+        np.random.seed(42)  # for reproducible results
+        data['Price_per_kWh'] = np.random.uniform(10, 25, len(data)).round(2)  # Simulated price in INR
         data['Avg_Rating'] = np.random.uniform(3.5, 5.0, len(data)).round(1)
         data['Is_Operational'] = data['StatusType'].apply(lambda x: x.get('IsOperational', False) if isinstance(x, dict) else False)
 
