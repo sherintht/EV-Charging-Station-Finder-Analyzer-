@@ -4,6 +4,7 @@ import requests
 import folium
 import numpy as np
 from streamlit_folium import folium_static
+import os
 
 # --- 1. PAGE CONFIGURATION ---
 st.set_page_config(
@@ -16,14 +17,20 @@ st.set_page_config(
 @st.cache_data(ttl=3600)  # Cache data for 1 hour
 def get_station_data(country_code='IN', max_results=500):
     """Fetches charging station data from Open Charge Map API and simulates extra data."""
+    
+    # Fetch the API Key from Streamlit secrets (for cloud deployment)
+    API_KEY = st.secrets["openchargemap"]["api_key"]  # Retrieve the API key securely
+
     API_URL = "https://api.openchargemap.io/v3/poi"
     params = {
         'output': 'json',
         'countrycode': country_code,
         'maxresults': max_results,
         'compact': True,
-        'verbose': False
+        'verbose': False,
+        'key': API_KEY  # Add the API key to the request
     }
+    
     try:
         response = requests.get(API_URL, params=params)
         response.raise_for_status()  # Raise an exception for bad status codes
@@ -71,9 +78,6 @@ if not df.empty:
     filtered_df = df.copy()
     if selected_city != "All":
         filtered_df = filtered_df[filtered_df['Town'] == selected_city]
-    
-    # Note: PowerKW is not a direct field; this simulates filtering. For a real app, parse 'Connections'.
-    # This example filters based on the presence of stations, not specific power levels.
     
     filtered_df = filtered_df[filtered_df['Avg_Rating'] >= min_rating]
 
