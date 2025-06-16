@@ -18,7 +18,7 @@ st.set_page_config(
 st.sidebar.header("Your Location")
 st.sidebar.info(
     """
-    Automatic location detection is disabled for compatibility.
+     If automatic location detection is disabled for compatibility.
     Please enter your coordinates manually.
     """
 )
