@@ -4,6 +4,7 @@ import requests
 import folium
 import numpy as np
 from streamlit_folium import folium_static
+from geopy.distance import geodesic
 
 # --- 1. PAGE CONFIGURATION ---
 st.set_page_config(
@@ -13,7 +14,14 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- 2. DATA FETCHING AND CACHING ---
+# --- 2. GET USER'S CURRENT LOCATION ---
+st.sidebar.header("Enter Your Location")
+
+# Use Streamlit's widgets or input method to get user's latitude and longitude
+latitude = st.sidebar.number_input("Enter Latitude:", value=9.5918, min_value=-90.0, max_value=90.0, step=0.0001)
+longitude = st.sidebar.number_input("Enter Longitude:", value=76.5225, min_value=-180.0, max_value=180.0, step=0.0001)
+
+# --- 3. DATA FETCHING AND CACHING ---
 @st.cache_data(ttl=3600)
 def get_station_data(country_code='IN', max_results=500):
     """Fetches charging station data from Open Charge Map API and simulates extra data."""
@@ -58,45 +66,59 @@ def get_station_data(country_code='IN', max_results=500):
         st.error(f"API Error: {e}")
         return pd.DataFrame()
 
-# --- 3. MAIN APP ---
+# --- 4. FIND THE NEAREST STATION BASED ON THE USER'S LOCATION ---
+
+def find_nearest_station(user_lat, user_lon, df):
+    """Finds the nearest charging station from the user's current location."""
+    nearest_station = None
+    min_distance = float('inf')
+
+    for _, row in df.iterrows():
+        station_coords = (row['Latitude'], row['Longitude'])
+        user_coords = (user_lat, user_lon)
+
+        # Calculate the distance using geodesic (Haversine formula)
+        distance = geodesic(user_coords, station_coords).km
+
+        if distance < min_distance:
+            min_distance = distance
+            nearest_station = row
+
+    return nearest_station, min_distance
+
+# --- 5. MAIN APP ---
 st.title("EV Charging Station Finder & Analyzer ⚡")
 df = get_station_data()
 
 if not df.empty:
-    st.sidebar.header("Filter Stations")
+    # Find the nearest station to the user’s location
+    nearest_station, distance = find_nearest_station(latitude, longitude, df)
 
-    cities = sorted(df['Town'].dropna().unique())
-    selected_city = st.sidebar.selectbox("Select a City", ["All"] + cities)
+    st.sidebar.write(f"Distance to nearest station: {distance:.2f} km")
 
-    speed_options = {"Any": (0, 350), "Slow (< 7kW)": (0, 7), "Fast (7-50kW)": (7, 50), "Ultra-Fast (> 50kW)": (50, 350)}
-    selected_speed = st.sidebar.select_slider("Charging Speed", options=list(speed_options.keys()))
+    # Display the nearest station information
+    st.header(f"Nearest Station: {nearest_station['Title']}")
+    st.write(f"**Location**: {nearest_station['Town']}")
+    st.write(f"**Rating**: {nearest_station['Avg_Rating']} ⭐")
+    st.write(f"**Price**: ₹{nearest_station['Price_per_kWh']} per kWh")
 
-    min_rating = st.sidebar.slider("Minimum User Rating", 1.0, 5.0, 3.5, 0.1)
-
-    filtered_df = df.copy()
-    if selected_city != "All":
-        filtered_df = filtered_df[filtered_df['Town'] == selected_city]
-    
-    filtered_df = filtered_df[filtered_df['Avg_Rating'] >= min_rating]
-
-    st.header(f"Found {len(filtered_df)} Stations")
-    map_center = [filtered_df['Latitude'].mean(), filtered_df['Longitude'].mean()]
+    # --- MAP DISPLAY ---
+    map_center = [latitude, longitude]
     m = folium.Map(location=map_center, zoom_start=12)
 
-    for idx, row in filtered_df.iterrows():
-        color = 'green' if row['Is_Operational'] else 'red'
-        icon = 'check' if row['Is_Operational'] else 'times'
-        popup_html = f"""
-        <h6>{row['Title']}</h6>
-        <b>Status:</b> {'Operational' if row['Is_Operational'] else 'Offline'}<br>
-        <b>Price:</b> ₹{row['Price_per_kWh']}/kWh (est.)<br>
-        <b>Rating:</b> {row['Avg_Rating']} ★
-        """
-        folium.Marker(
-            location=[row['Latitude'], row['Longitude']],
-            popup=folium.Popup(popup_html, max_width=250),
-            icon=folium.Icon(color=color, icon=icon, prefix='fa')
-        ).add_to(m)
+    # Marker for user's location
+    folium.Marker(
+        location=[latitude, longitude],
+        popup="Your Location",
+        icon=folium.Icon(color='blue', icon='info-sign')
+    ).add_to(m)
+
+    # Marker for the nearest charging station
+    folium.Marker(
+        location=[nearest_station['Latitude'], nearest_station['Longitude']],
+        popup=folium.Popup(f"{nearest_station['Title']}", max_width=250),
+        icon=folium.Icon(color='green', icon='flash', prefix='fa')
+    ).add_to(m)
 
     folium_static(m, width=1200, height=600)
 else:
