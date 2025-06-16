@@ -1,34 +1,3 @@
-Of course. You've run into a common SyntaxError. I can explain exactly what it means and how to fix it.
-What the Error Means
-
-The error message SyntaxError: unterminated string literal (detected at line 19) is Python's way of saying that a string of text was started but never properly finished.
-
-In your code at line 19, you have this:
-Python
-
-# Incorrect Code
-st.sidebar.info("If automatic location detection is disabled for compatibility.
-    Please enter your coordinates manually.")
-
-In Python, when you start text with a single quote (") it must end on the same line. Because your message continues onto a second line, it causes a syntax error.
-The Solution
-
-To fix this, you must use triple quotes (""") for any text that spans multiple lines.
-
-Here is the corrected version of that section:
-Python
-
-# Corrected Code
-st.sidebar.info("""
-    Automatic location detection is disabled for compatibility.
-    Please enter your coordinates manually.
-""")
-
-Complete, Corrected Code
-
-Here is the full application code with this one syntax error fixed. Please replace your entire script with this version.
-Python
-
 import streamlit as st
 import pandas as pd
 import requests
