@@ -47,7 +47,14 @@ def get_station_data(country_code='IN', max_results=500):
         np.random.seed(42)  # for reproducible results
         data['Price_per_kWh'] = np.random.uniform(10, 25, len(data)).round(2)  # Simulated price in INR
         data['Avg_Rating'] = np.random.uniform(3.5, 5.0, len(data)).round(1)
-        data['Is_Operational'] = data['StatusType'].apply(lambda x: x.get('IsOperational', False) if isinstance(x, dict) else False)
+
+        # Check if 'StatusType' exists before processing
+        if 'StatusType' in data.columns:
+            # Only process stations with 'StatusType' info
+            data['Is_Operational'] = data['StatusType'].apply(lambda x: x.get('IsOperational', False) if isinstance(x, dict) else False)
+        else:
+            # If 'StatusType' is missing, set 'Is_Operational' to False by default
+            data['Is_Operational'] = False
 
         return data
     except requests.exceptions.RequestException as e:
