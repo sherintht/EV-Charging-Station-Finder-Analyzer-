@@ -1,8 +1,7 @@
-
-pip install streamlit pandas requests plotly numpy
-pip install streamlit-folium==0.10.0
-pip install streamlit
-pip install  pandas 
-pip install  requests 
-pip install  numpy
-pip install  plotly 
+streamlit
+pandas
+requests
+plotly
+numpy
+folium
+streamlit-folium==0.10.0
